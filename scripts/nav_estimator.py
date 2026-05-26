@@ -91,6 +91,32 @@ def get_stock_quote(stock_code):
     return price, chg_pct
 
 
+def get_official_nav(fund_code):
+    """从天天基金获取基金正式公布的净值，返回 (净值, 涨跌幅%, 净值日期) 或 None"""
+    url = f"https://api.fund.eastmoney.com/f10/lsjz?callback=jQuery&fundCode={fund_code}&pageIndex=1&pageSize=1"
+    result = sp.run([CURL_PATH, "-s", "-A", "Mozilla/5.0",
+                     "-e", "https://fundf10.eastmoney.com/", url],
+                    capture_output=True, timeout=15)
+    if result.returncode != 0:
+        return None
+    data = result.stdout.decode("utf-8", errors="replace")
+    m = re.search(r'\("Data":(.*?)"ErrCode"', data, re.DOTALL)
+    if not m:
+        return None
+    try:
+        d = json.loads("{" + m.group(1) + '\"ErrCode\":0}')
+        records = d.get("LSJZList", [])
+        if not records:
+            return None
+        nav = float(records[0]["DWJZ"])
+        chg_str = records[0]["JZZZL"]
+        date = records[0]["FSRQ"]
+        chg_pct = float(chg_str) if chg_str else None
+        return (nav, chg_pct, date)
+    except:
+        return None
+
+
 def estimate_fund_return(fund_code):
     """估算基金当日涨跌幅，返回 (基金名称, 股票列表, 预估涨跌幅%, 覆盖率%)"""
     name, codes, weights = fetch_top10_holdings(fund_code)
@@ -240,13 +266,13 @@ class FundPortfolioApp:
         main_frame = tk.Frame(self.root, bg=self.COLORS["bg"])
         main_frame.pack(fill="both", expand=True, padx=10, pady=(8, 4))
 
-        # 表格
+        # 表格 - 增加实际涨跌/估算涨跌两列
         columns = ("基金代码", "基金名称", "持仓金额", "持有份额", "持仓收益率",
-                   "当日涨跌", "当日收益", "更新后收益率", "覆盖率", "状态")
+                   "实际涨跌", "估算涨跌", "当日收益", "更新后收益率", "净值日期")
         self.tree = ttk.Treeview(main_frame, columns=columns, show="headings",
                                 height=15, selectmode="browse")
 
-        col_widths = [90, 210, 120, 110, 110, 95, 120, 120, 80, 80]
+        col_widths = [90, 200, 110, 100, 100, 90, 90, 120, 110, 100]
         for col, w in zip(columns, col_widths):
             self.tree.heading(col, text=col)
             self.tree.column(col, width=w, anchor="center")
@@ -269,7 +295,7 @@ class FundPortfolioApp:
         footer.pack(fill="x", side="bottom")
         footer.pack_propagate(False)
         tk.Label(footer,
-                text="\u2139\ufe0f 双击基金编辑  |  点击「刷新」获取实时行情  |  每15秒自动更新",
+                text="\u2139\ufe0f 实际涨跌 = 基金公司公布的正式净值  |  估算涨跌 = 基于十大重仓股实时估算  |  19:00后净值陆续更新",
                 font=("PingFang SC", 10), fg=self.COLORS["subtext"],
                 bg=self.COLORS["toolbar_bg"]).pack(side="left", padx=20)
 
@@ -461,7 +487,7 @@ class FundPortfolioApp:
             self.refresh_display()
 
     def refresh_display(self):
-        """刷新表格显示（不重新计算）"""
+        """刷新表格显示"""
         for row in self.tree.get_children():
             self.tree.delete(row)
 
@@ -470,22 +496,41 @@ class FundPortfolioApp:
             prev_yield = item.get("yield_pct", 0)
             amount = item.get("amount", 0)
             est_chg = item.get("_est_chg", None)
+            official_chg = item.get("_official_chg", None)
+            official_date = item.get("_official_date", None)
             coverage = item.get("_coverage", None)
 
-            if est_chg is not None:
-                daily_pnl = amount * est_chg / 100.0
-                new_yield = 100 * ((1 + prev_yield / 100) * (1 + est_chg / 100) - 1)
-                chg_text = f"{est_chg:+.2f}%"
+            # 决定使用哪个涨跌幅来计算收益（优先使用官方净值）
+            use_official = official_chg is not None
+            use_chg = official_chg if use_official else est_chg
+
+            if use_chg is not None:
+                daily_pnl = amount * use_chg / 100.0
+                new_yield = 100 * ((1 + prev_yield / 100) * (1 + use_chg / 100) - 1)
                 pnl_text = f"{daily_pnl:+,.0f}"
                 yield_text = f"{new_yield:+.2f}%"
-                cov_text = f"{coverage*100:.1f}%" if coverage else "-"
-                status = "\u2705"  # 已更新
             else:
-                chg_text = "-"
                 pnl_text = "-"
                 yield_text = f"{prev_yield:+.2f}%"
-                cov_text = "-"
-                status = "\u23F3"  # 待刷新
+
+            # 实际涨跌列
+            if official_chg is not None:
+                actual_text = f"{official_chg:+.2f}%"
+                actual_tag = "gain" if official_chg >= 0 else "loss"
+            else:
+                actual_text = "\u23F3"  # 待更新（时钟图标）
+                actual_tag = ""
+
+            # 估算涨跌列
+            if est_chg is not None:
+                est_text = f"{est_chg:+.2f}%"
+                est_tag = "gain" if est_chg >= 0 else "loss"
+            else:
+                est_text = "-"
+                est_tag = ""
+
+            # 净值日期
+            date_text = official_date if official_date else "-"
 
             values = (
                 item["code"],
@@ -493,16 +538,14 @@ class FundPortfolioApp:
                 f"{amount:,.0f}",
                 f"{item.get('shares', 0):,.2f}",
                 f"{prev_yield:+.2f}%",
-                chg_text,
+                actual_text,
+                est_text,
                 f"{pnl_text}",
                 yield_text,
-                cov_text,
-                status,
+                date_text,
             )
             tag = "even" if alt else "odd"
-            chg_tag = "gain" if (est_chg is not None and est_chg >= 0) else ""
-            loss_tag = "loss" if (est_chg is not None and est_chg < 0) else ""
-            self.tree.insert("", "end", values=values, tags=(tag, chg_tag, loss_tag))
+            self.tree.insert("", "end", values=values, tags=(tag, actual_tag, est_tag))
             alt = not alt
 
         self.tree.tag_configure("even", background="#ffffff")
@@ -517,7 +560,7 @@ class FundPortfolioApp:
         threading.Thread(target=self._refresh_all_thread, daemon=True).start()
 
     def refresh_prices(self):
-        """仅刷新已有缓存数据的基金的实时价格（轻量刷新）"""
+        """轻量刷新：更新估算涨跌 + 检查最新正式净值"""
         items_to_refresh = [i for i, item in enumerate(self.portfolio)
                             if item.get("_codes") and len(item["_codes"]) == 10]
         if not items_to_refresh:
@@ -527,20 +570,27 @@ class FundPortfolioApp:
         for idx in items_to_refresh:
             item = self.portfolio[idx]
             try:
+                # 更新估算涨跌
                 codes = item["_codes"]
                 weights = item["_weights"]
                 total_weight = sum(weights)
                 weighted_sum = 0.0
-
                 for code, w in zip(codes, weights):
                     try:
                         _, chg = get_stock_quote(code)
                         weighted_sum += chg * w / 100.0
                     except:
                         pass
-
                 item["_est_chg"] = weighted_sum
                 item["_coverage"] = total_weight / 100.0
+
+                # 检查正式净值是否已发布
+                nav = get_official_nav(item["code"])
+                if nav:
+                    item["_official_nav"] = nav[0]
+                    item["_official_chg"] = nav[1]
+                    item["_official_date"] = nav[2]
+
                 changed = True
             except:
                 pass
@@ -554,7 +604,7 @@ class FundPortfolioApp:
             item = self.portfolio[idx]
             code = item["code"]
             try:
-                self.root.after(0, lambda: self.set_status(f"正在获取 {code} ...", True))
+                self.root.after(0, lambda c=code: self.set_status(f"正在获取 {c} ...", True))
                 name, codes, weights = fetch_top10_holdings(code)
                 item["name"] = name
                 item["_codes"] = codes
@@ -566,11 +616,18 @@ class FundPortfolioApp:
                     try:
                         _, chg = get_stock_quote(sc)
                         weighted_sum += chg * w / 100.0
-                    except Exception as e:
+                    except:
                         pass
 
                 item["_est_chg"] = weighted_sum
                 item["_coverage"] = total_weight / 100.0
+
+                # 获取正式净值
+                nav = get_official_nav(code)
+                if nav:
+                    item["_official_nav"] = nav[0]
+                    item["_official_chg"] = nav[1]
+                    item["_official_date"] = nav[2]
 
             except Exception as e:
                 item.pop("_est_chg", None)
