@@ -18,12 +18,15 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fund_portf
 CNY_TZ = timezone(timedelta(hours=8))
 
 
+CURL_PATH = "/usr/bin/curl"
+
+
 def fetch_top10_holdings(fund_code):
     """从天天基金获取基金最新十大重仓股（使用 curl 绕过 SSL 兼容问题）"""
     url = f"https://fundf10.eastmoney.com/FundArchivesDatas.aspx?type=jjcc&code={fund_code}&topline=10&year=&month=&rt=0.1"
     try:
         result = sp.run([
-            "curl", "-s", "-A",
+            CURL_PATH, "-s", "-A",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
             url
         ], capture_output=True, timeout=30)
@@ -67,18 +70,17 @@ def fetch_top10_holdings(fund_code):
 
 
 def get_stock_quote(stock_code):
-    """从腾讯行情获取实时股价"""
+    """从腾讯行情获取实时股价（使用 curl 避免 SSL 兼容问题）"""
     if stock_code.startswith("6"):
         sec = f"sh{stock_code}"
     else:
         sec = f"sz{stock_code}"
 
     url = f"https://qt.gtimg.cn/q={sec}"
-    req = urllib.request.Request(url, headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
-    })
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        data = resp.read().decode("gbk")
+    result = sp.run([CURL_PATH, "-s", url], capture_output=True, timeout=10)
+    if result.returncode != 0:
+        raise Exception(f"curl 行情请求失败 {stock_code}")
+    data = result.stdout.decode("gbk", errors="replace")
 
     fields = data.split("~")
     if len(fields) < 33:
