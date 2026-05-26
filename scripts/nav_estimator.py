@@ -154,8 +154,8 @@ class FundPortfolioApp:
             "table_bg": "#ffffff",
             "table_alt": "#f8f9ff",
             "table_header_bg": "#eef0f8",
-            "green": "#00b894",
-            "red": "#e17055",
+            "green": "#27ae60",  # 下跌（绿色）
+            "red": "#e74c3c",    # 上涨（红色）
             "add": "#00b894",
             "delete": "#e17055",
             "refresh": "#0984e3",
@@ -507,7 +507,7 @@ class FundPortfolioApp:
             if use_chg is not None:
                 daily_pnl = amount * use_chg / 100.0
                 new_yield = 100 * ((1 + prev_yield / 100) * (1 + use_chg / 100) - 1)
-                pnl_text = f"{daily_pnl:+,.0f}"
+                pnl_text = f"{daily_pnl:+,.2f}"
                 yield_text = f"{new_yield:+.2f}%"
             else:
                 pnl_text = "-"
@@ -550,8 +550,9 @@ class FundPortfolioApp:
 
         self.tree.tag_configure("even", background="#ffffff")
         self.tree.tag_configure("odd", background="#f8f9ff")
-        self.tree.tag_configure("gain", foreground=self.COLORS["green"])
-        self.tree.tag_configure("loss", foreground=self.COLORS["red"])
+        # A股习惯：红涨绿跌
+        self.tree.tag_configure("gain", foreground=self.COLORS["red"])
+        self.tree.tag_configure("loss", foreground=self.COLORS["green"])
 
     def refresh_all(self):
         """全部基金重新获取数据"""
