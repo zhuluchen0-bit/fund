@@ -119,10 +119,45 @@ class FundPortfolioApp:
         self.root.geometry("1100x680")
         self.root.minsize(900, 500)
 
+        # 自定义配色
+        self.COLORS = {
+            "bg": "#f5f6fa",
+            "header_bg": "#1a1a2e",
+            "header_fg": "#ffffff",
+            "toolbar_bg": "#e8e9ef",
+            "table_bg": "#ffffff",
+            "table_alt": "#f8f9ff",
+            "table_header_bg": "#eef0f8",
+            "green": "#00b894",
+            "red": "#e17055",
+            "add": "#00b894",
+            "delete": "#e17055",
+            "refresh": "#0984e3",
+            "edit": "#fdcb6e",
+            "btn_fg": "#ffffff",
+            "btn_font": ("PingFang SC", 12, "bold"),
+            "text": "#2d3436",
+            "subtext": "#b2bec3",
+        }
+
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview", font=("Helvetica", 12), rowheight=30)
-        style.configure("Treeview.Heading", font=("Helvetica", 12, "bold"))
+        style.configure("Treeview",
+                       background=self.COLORS["table_bg"],
+                       foreground=self.COLORS["text"],
+                       fieldbackground=self.COLORS["table_bg"],
+                       font=("PingFang SC", 12),
+                       rowheight=32,
+                       borderwidth=0)
+        style.configure("Treeview.Heading",
+                       background=self.COLORS["table_header_bg"],
+                       foreground=self.COLORS["text"],
+                       font=("PingFang SC", 11, "bold"),
+                       borderwidth=1,
+                       relief="flat")
+        style.map("Treeview",
+                  background=[("selected", "#dfe6e9")],
+                  foreground=[("selected", self.COLORS["text"])])
 
         self.portfolio = self.load_portfolio()
         self.create_widgets()
@@ -143,40 +178,75 @@ class FundPortfolioApp:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(self.portfolio, f, ensure_ascii=False, indent=2)
 
+    def make_btn(self, parent, text, cmd, bg, padx=16):
+        """统一风格的按钮"""
+        btn = tk.Label(parent, text=text, cursor="hand2",
+                      bg=bg, fg=self.COLORS["btn_fg"],
+                      font=self.COLORS["btn_font"],
+                      padx=padx, pady=6)
+        btn.pack(side="left", padx=4, pady=6)
+        btn.bind("<Button-1>", lambda e: cmd())
+        btn.bind("<Enter>", lambda e: btn.config(bg=self._lighten(bg)))
+        btn.bind("<Leave>", lambda e: btn.config(bg=bg))
+        return btn
+
+    def _lighten(self, color):
+        """颜色变亮 15%"""
+        c = color.lstrip("#")
+        r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        r = min(255, int(r + (255 - r) * 0.3))
+        g = min(255, int(g + (255 - g) * 0.3))
+        b = min(255, int(b + (255 - b) * 0.3))
+        return f"#{r:02x}{g:02x}{b:02x}"
+
     def create_widgets(self):
+        root_bg = self.COLORS["bg"]
+        self.root.configure(bg=root_bg)
+
         # 顶部标题栏
-        title_frame = tk.Frame(self.root, bg="#2b5797", height=50)
+        title_frame = tk.Frame(self.root, bg=self.COLORS["header_bg"], height=56)
         title_frame.pack(fill="x")
         title_frame.pack_propagate(False)
-        tk.Label(title_frame, text="基金净值估算工具", font=("Helvetica", 18, "bold"),
-                 fg="white", bg="#2b5797").pack(side="left", padx=20, pady=10)
-        tk.Label(title_frame, text="数据来源：天天基金 + 腾讯行情",
-                 font=("Helvetica", 10), fg="#ccd5e0", bg="#2b5797").pack(side="right", padx=20)
+
+        tk.Label(title_frame, text="\U0001F4CA  基金净值估算", font=("PingFang SC", 20, "bold"),
+                fg=self.COLORS["header_fg"], bg=self.COLORS["header_bg"]).pack(side="left", padx=24, pady=12)
+        tk.Label(title_frame, text="天天基金 / 腾讯行情", font=("PingFang SC", 11),
+                fg="#636e72", bg=self.COLORS["header_bg"]).pack(side="right", padx=24)
 
         # 工具栏
-        toolbar = tk.Frame(self.root, bg="#f0f0f0", height=40)
+        toolbar = tk.Frame(self.root, bg=self.COLORS["toolbar_bg"], height=44)
         toolbar.pack(fill="x")
         toolbar.pack_propagate(False)
 
-        tk.Button(toolbar, text="+ 添加基金", command=self.add_fund_dialog,
-                  bg="#4CAF50", fg="white", font=("Helvetica", 11), padx=12).pack(side="left", padx=10, pady=5)
-        tk.Button(toolbar, text="删除选中", command=self.delete_selected,
-                  bg="#f44336", fg="white", font=("Helvetica", 11), padx=12).pack(side="left", padx=5, pady=5)
-        tk.Button(toolbar, text="全部刷新", command=self.refresh_all,
-                  bg="#2196F3", fg="white", font=("Helvetica", 11), padx=12).pack(side="left", padx=5, pady=5)
-        tk.Button(toolbar, text="编辑选中", command=self.edit_selected,
-                  bg="#FF9800", fg="white", font=("Helvetica", 11), padx=12).pack(side="left", padx=5, pady=5)
+        self.make_btn(toolbar, "   + 添加基金  ", self.add_fund_dialog, self.COLORS["add"], padx=18)
+        self.make_btn(toolbar, "   \u2702 删除  ", self.delete_selected, self.COLORS["delete"], padx=18)
+        self.make_btn(toolbar, "   \U0001F504 刷新  ", self.refresh_all, self.COLORS["refresh"], padx=18)
+        self.make_btn(toolbar, "   \u270F 编辑  ", self.edit_selected, self.COLORS["edit"], padx=18)
 
-        self.status_label = tk.Label(toolbar, text="就绪", font=("Helvetica", 10),
-                                     fg="#666", bg="#f0f0f0")
-        self.status_label.pack(side="right", padx=15)
+        # 状态栏
+        tk.Frame(toolbar, bg=self.COLORS["toolbar_bg"], width=20).pack(side="left")
+        self.status_indicator = tk.Canvas(toolbar, width=10, height=10,
+                                          bg=self.COLORS["toolbar_bg"],
+                                          highlightthickness=0)
+        self.status_indicator.pack(side="right", padx=(0, 4))
+        self._dot = self.status_indicator.create_oval(0, 0, 10, 10,
+                                                      fill=self.COLORS["green"],
+                                                      outline="")
+        self.status_label = tk.Label(toolbar, text="就绪", font=("PingFang SC", 11),
+                                     fg=self.COLORS["subtext"], bg=self.COLORS["toolbar_bg"])
+        self.status_label.pack(side="right", padx=(0, 18))
 
-        # 主表格
+        # 主区域
+        main_frame = tk.Frame(self.root, bg=self.COLORS["bg"])
+        main_frame.pack(fill="both", expand=True, padx=10, pady=(8, 4))
+
+        # 表格
         columns = ("基金代码", "基金名称", "持仓金额", "持有份额", "持仓收益率",
                    "当日涨跌", "当日收益", "更新后收益率", "覆盖率", "状态")
-        self.tree = ttk.Treeview(self.root, columns=columns, show="headings", height=15)
+        self.tree = ttk.Treeview(main_frame, columns=columns, show="headings",
+                                height=15, selectmode="browse")
 
-        col_widths = [90, 200, 110, 100, 100, 90, 110, 110, 80, 80]
+        col_widths = [90, 210, 120, 110, 110, 95, 120, 120, 80, 80]
         for col, w in zip(columns, col_widths):
             self.tree.heading(col, text=col)
             self.tree.column(col, width=w, anchor="center")
@@ -186,23 +256,23 @@ class FundPortfolioApp:
         self.tree.column("持有份额", anchor="e")
         self.tree.column("当日收益", anchor="e")
 
-        scrollbar = ttk.Scrollbar(self.root, orient="vertical", command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
-        self.tree.pack(side="left", fill="both", expand=True, padx=(10, 0), pady=10)
-        scrollbar.pack(side="right", fill="y", padx=(0, 10), pady=10)
+        self.tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y", padx=(4, 0))
 
         self.tree.bind("<Double-1>", lambda e: self.edit_selected())
 
-        # 底部说明栏
-        footer = tk.Frame(self.root, bg="#f8f8f8", height=50)
+        # 底部栏
+        footer = tk.Frame(self.root, bg=self.COLORS["toolbar_bg"], height=36)
         footer.pack(fill="x", side="bottom")
         footer.pack_propagate(False)
         tk.Label(footer,
-                 text="双击基金可编辑 | 点击「全部刷新」获取实时数据",
-                 font=("Helvetica", 10), fg="#999", bg="#f8f8f8").pack(side="left", padx=20, pady=12)
+                text="\u2139\ufe0f 双击基金编辑  |  点击「刷新」获取实时行情  |  每15秒自动更新",
+                font=("PingFang SC", 10), fg=self.COLORS["subtext"],
+                bg=self.COLORS["toolbar_bg"]).pack(side="left", padx=20)
 
-        # 启动自动刷新
         self.auto_refresh()
 
     def auto_refresh(self):
@@ -210,79 +280,133 @@ class FundPortfolioApp:
         self.refresh_prices()
         self.root.after(15000, self.auto_refresh)
 
-    def set_status(self, text):
+    def set_status(self, text, is_ok=True):
         self.status_label.config(text=text)
+        color = self.COLORS["green"] if is_ok else self.COLORS["red"]
+        try:
+            self.status_indicator.itemconfig(self._dot, fill=color)
+        except:
+            pass
         self.root.update_idletasks()
 
-    def add_fund_dialog(self):
+    def _make_dialog(self, title, fields, defaults, callback, extra_row=None):
+        """统一对话框样式"""
+        bg = self.COLORS["bg"]
         dialog = tk.Toplevel(self.root)
-        dialog.title("添加基金")
-        dialog.geometry("500x280")
+        dialog.title(title)
+        dialog.geometry("460x360")
         dialog.resizable(False, False)
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.configure(bg=bg)
 
-        fields = [
-            ("基金代码 *", "code"),
-            ("持仓金额（元）", "amount"),
-            ("持有份额", "shares"),
-            ("当前持仓收益率（%）", "yield_pct"),
-        ]
+        # 标题头
+        tk.Frame(dialog, bg=self.COLORS["header_bg"], height=40).pack(fill="x")
+
+        # 表单
+        form = tk.Frame(dialog, bg=bg, padx=30, pady=20)
+        form.pack(fill="both", expand=True)
 
         entries = {}
         for i, (label, key) in enumerate(fields):
-            tk.Label(dialog, text=label, font=("Helvetica", 11)).grid(row=i, column=0, padx=15, pady=8, sticky="w")
-            entry = tk.Entry(dialog, font=("Helvetica", 12), width=30)
-            entry.grid(row=i, column=1, padx=10, pady=8)
+            tk.Label(form, text=label, font=("PingFang SC", 11),
+                    fg=self.COLORS["text"], bg=bg).grid(row=i, column=0, padx=(0, 15), pady=7, sticky="w")
+            entry = tk.Entry(form, font=("PingFang SC", 12),
+                           bd=1, relief="solid", highlightthickness=0)
+            entry.grid(row=i, column=1, padx=0, pady=7, sticky="ew", ipady=3)
+            default = defaults.get(key, "")
+            if default:
+                entry.insert(0, str(default))
             entries[key] = entry
 
-        tk.Label(dialog, text="基金名称", font=("Helvetica", 11)).grid(row=4, column=0, padx=15, pady=8, sticky="w")
-        name_var = tk.StringVar()
-        name_entry = tk.Entry(dialog, font=("Helvetica", 12), width=30, textvariable=name_var)
-        name_entry.grid(row=4, column=1, padx=10, pady=8)
+        form.columnconfigure(1, weight=1)
 
-        def on_submit():
-            code = entries["code"].get().strip()
+        # 额外行
+        extra_row_index = len(fields)
+        if extra_row:
+            extra_row(form, entries, extra_row_index)
+
+        # 按钮
+        btn_frame = tk.Frame(form, bg=bg)
+        btn_frame.grid(row=extra_row_index + 1, column=0, columnspan=2, pady=(15, 0))
+
+        def ok():
+            result = {}
+            for _, key in fields:
+                val = entries[key].get().strip()
+                result[key] = val if val else None
+            callback(result, dialog)
+
+        def cancel():
+            dialog.destroy()
+
+        # 取消按钮
+        tk.Label(btn_frame, text="    取消    ", cursor="hand2",
+                bg=self.COLORS["toolbar_bg"], fg=self.COLORS["text"],
+                font=self.COLORS["btn_font"], padx=18, pady=6).pack(side="left", padx=6)
+        btn_cancel = btn_frame.winfo_children()[-1]
+        btn_cancel.bind("<Button-1>", lambda e: cancel())
+        btn_cancel.bind("<Enter>", lambda e: btn_cancel.config(bg=self.COLORS["subtext"]))
+        btn_cancel.bind("<Leave>", lambda e: btn_cancel.config(bg=self.COLORS["toolbar_bg"]))
+
+        # 确认按钮
+        tk.Label(btn_frame, text="    确认    ", cursor="hand2",
+                bg=self.COLORS["refresh"], fg="#ffffff",
+                font=self.COLORS["btn_font"], padx=18, pady=6).pack(side="left", padx=6)
+        btn_ok = btn_frame.winfo_children()[-1]
+        btn_ok.bind("<Button-1>", lambda e: ok())
+        btn_ok.bind("<Enter>", lambda e: btn_ok.config(bg=self._lighten(self.COLORS["refresh"])))
+        btn_ok.bind("<Leave>", lambda e: btn_ok.config(bg=self.COLORS["refresh"]))
+
+        dialog.bind("<Return>", lambda e: ok())
+        return dialog
+
+    def add_fund_dialog(self):
+        fields = [
+            ("基金代码", "code"),
+            ("基金名称（选填）", "name"),
+            ("持仓金额（元）", "amount"),
+            ("持有份额", "shares"),
+            ("当前收益率（%）", "yield_pct"),
+        ]
+
+        def extra(form, entries, row):
+            def fetch():
+                code = entries["code"].get().strip()
+                if not code:
+                    return
+                try:
+                    n, _, _ = fetch_top10_holdings(code)
+                    entries["name"].delete(0, "end")
+                    entries["name"].insert(0, n)
+                except:
+                    pass
+            lbl = tk.Label(form, text="  \U0001F50D 自动获取名称  ", cursor="hand2",
+                          bg=self.COLORS["edit"], fg=self.COLORS["text"],
+                          font=("PingFang SC", 10), padx=10, pady=4)
+            lbl.grid(row=row, column=1, sticky="w", pady=(4, 0))
+            lbl.bind("<Button-1>", lambda e: fetch())
+            lbl.bind("<Enter>", lambda e: lbl.config(bg=self._lighten(self.COLORS["edit"])))
+            lbl.bind("<Leave>", lambda e: lbl.config(bg=self.COLORS["edit"]))
+
+        def callback(result, dialog):
+            code = result.get("code")
             if not code:
                 messagebox.showwarning("提示", "基金代码不能为空")
                 return
-
-            amount = entries["amount"].get().strip()
-            shares = entries["shares"].get().strip()
-            yield_pct = entries["yield_pct"].get().strip()
-
             item = {
                 "code": code,
-                "name": name_var.get().strip() or f"基金{code}",
-                "amount": float(amount) if amount else 0,
-                "shares": float(shares) if shares else 0,
-                "yield_pct": float(yield_pct) if yield_pct else 0,
+                "name": result.get("name") or f"基金{code}",
+                "amount": float(result["amount"]) if result.get("amount") else 0,
+                "shares": float(result["shares"]) if result.get("shares") else 0,
+                "yield_pct": float(result["yield_pct"]) if result.get("yield_pct") else 0,
             }
-
             self.portfolio.append(item)
             self.save_portfolio()
             self.refresh_display()
             dialog.destroy()
 
-        def on_fetch_name():
-            code = entries["code"].get().strip()
-            if not code:
-                return
-            try:
-                tm_name, _, _ = fetch_top10_holdings(code)
-                name_var.set(tm_name)
-            except:
-                pass
-
-        btn_frame = tk.Frame(dialog)
-        btn_frame.grid(row=5, column=0, columnspan=2, pady=15)
-
-        tk.Button(btn_frame, text="获取基金名称", command=on_fetch_name,
-                  bg="#607D8B", fg="white", font=("Helvetica", 10), padx=8).pack(side="left", padx=5)
-        tk.Button(btn_frame, text="确认添加", command=on_submit,
-                  bg="#4CAF50", fg="white", font=("Helvetica", 11), padx=15).pack(side="left", padx=10)
-
-        dialog.bind("<Return>", lambda e: on_submit())
+        self._make_dialog("添加基金", fields, {}, callback, extra)
 
     def edit_selected(self):
         selection = self.tree.selection()
@@ -293,45 +417,35 @@ class FundPortfolioApp:
         idx = self.tree.index(selection[0])
         item = self.portfolio[idx]
 
-        dialog = tk.Toplevel(self.root)
-        dialog.title(f"编辑基金 - {item['code']}")
-        dialog.geometry("500x320")
-        dialog.resizable(False, False)
-        dialog.transient(self.root)
-        dialog.grab_set()
-
         fields = [
             ("基金代码", "code"),
             ("基金名称", "name"),
             ("持仓金额（元）", "amount"),
             ("持有份额", "shares"),
-            ("当前持仓收益率（%）", "yield_pct"),
+            ("当前收益率（%）", "yield_pct"),
         ]
 
-        entries = {}
-        for i, (label, key) in enumerate(fields):
-            tk.Label(dialog, text=label, font=("Helvetica", 11)).grid(row=i, column=0, padx=15, pady=8, sticky="w")
-            entry = tk.Entry(dialog, font=("Helvetica", 12), width=30)
-            entry.insert(0, str(item.get(key, "")))
-            entry.grid(row=i, column=1, padx=10, pady=8)
-            entries[key] = entry
+        defaults = {
+            "code": item.get("code", ""),
+            "name": item.get("name", ""),
+            "amount": str(item.get("amount", 0)),
+            "shares": str(item.get("shares", 0)),
+            "yield_pct": str(item.get("yield_pct", 0)),
+        }
 
-        def on_submit():
+        def callback(result, dialog):
             self.portfolio[idx] = {
-                "code": entries["code"].get().strip(),
-                "name": entries["name"].get().strip(),
-                "amount": float(entries["amount"].get()) if entries["amount"].get().strip() else 0,
-                "shares": float(entries["shares"].get()) if entries["shares"].get().strip() else 0,
-                "yield_pct": float(entries["yield_pct"].get()) if entries["yield_pct"].get().strip() else 0,
+                "code": result["code"] or item["code"],
+                "name": result.get("name") or item.get("name", ""),
+                "amount": float(result["amount"]) if result.get("amount") else 0,
+                "shares": float(result["shares"]) if result.get("shares") else 0,
+                "yield_pct": float(result["yield_pct"]) if result.get("yield_pct") else 0,
             }
             self.save_portfolio()
             self.refresh_display()
             dialog.destroy()
 
-        tk.Button(dialog, text="保存修改", command=on_submit,
-                  bg="#FF9800", fg="white", font=("Helvetica", 11), padx=15).grid(row=6, column=0, columnspan=2, pady=15)
-
-        dialog.bind("<Return>", lambda e: on_submit())
+        self._make_dialog(f"编辑基金 - {item['code']}", fields, defaults, callback)
 
     def delete_selected(self):
         selection = self.tree.selection()
@@ -351,6 +465,7 @@ class FundPortfolioApp:
         for row in self.tree.get_children():
             self.tree.delete(row)
 
+        alt = False
         for item in self.portfolio:
             prev_yield = item.get("yield_pct", 0)
             amount = item.get("amount", 0)
@@ -361,16 +476,16 @@ class FundPortfolioApp:
                 daily_pnl = amount * est_chg / 100.0
                 new_yield = 100 * ((1 + prev_yield / 100) * (1 + est_chg / 100) - 1)
                 chg_text = f"{est_chg:+.2f}%"
-                pnl_text = f"{daily_pnl:+,.0f} 元"
+                pnl_text = f"{daily_pnl:+,.0f}"
                 yield_text = f"{new_yield:+.2f}%"
                 cov_text = f"{coverage*100:.1f}%" if coverage else "-"
-                status = "已更新" if est_chg >= 0 else "已更新"
+                status = "\u2705"  # 已更新
             else:
                 chg_text = "-"
                 pnl_text = "-"
                 yield_text = f"{prev_yield:+.2f}%"
                 cov_text = "-"
-                status = "待刷新"
+                status = "\u23F3"  # 待刷新
 
             values = (
                 item["code"],
@@ -379,20 +494,25 @@ class FundPortfolioApp:
                 f"{item.get('shares', 0):,.2f}",
                 f"{prev_yield:+.2f}%",
                 chg_text,
-                pnl_text,
+                f"{pnl_text}",
                 yield_text,
                 cov_text,
                 status,
             )
-            tag = "positive" if (est_chg is not None and est_chg >= 0) else "negative"
-            self.tree.insert("", "end", values=values, tags=(tag,))
+            tag = "even" if alt else "odd"
+            chg_tag = "gain" if (est_chg is not None and est_chg >= 0) else ""
+            loss_tag = "loss" if (est_chg is not None and est_chg < 0) else ""
+            self.tree.insert("", "end", values=values, tags=(tag, chg_tag, loss_tag))
+            alt = not alt
 
-        self.tree.tag_configure("positive", foreground="green")
-        self.tree.tag_configure("negative", foreground="red")
+        self.tree.tag_configure("even", background="#ffffff")
+        self.tree.tag_configure("odd", background="#f8f9ff")
+        self.tree.tag_configure("gain", foreground=self.COLORS["green"])
+        self.tree.tag_configure("loss", foreground=self.COLORS["red"])
 
     def refresh_all(self):
         """全部基金重新获取数据"""
-        self.set_status("正在获取数据...")
+        self.set_status("正在获取数据...", True)
         self.refresh_button_state(False)
         threading.Thread(target=self._refresh_all_thread, daemon=True).start()
 
@@ -434,7 +554,7 @@ class FundPortfolioApp:
             item = self.portfolio[idx]
             code = item["code"]
             try:
-                self.root.after(0, self.set_status, f"正在获取 {code} ...")
+                self.root.after(0, lambda: self.set_status(f"正在获取 {code} ...", True))
                 name, codes, weights = fetch_top10_holdings(code)
                 item["name"] = name
                 item["_codes"] = codes
@@ -455,19 +575,19 @@ class FundPortfolioApp:
             except Exception as e:
                 item.pop("_est_chg", None)
                 item.pop("_coverage", None)
-                self.root.after(0, self.set_status, f"{code}: {e}")
+                self.root.after(0, lambda: self.set_status(f"{code}: {e}", False))
 
         self.save_portfolio()
         self.root.after(0, self.refresh_display)
-        self.root.after(0, self.set_status, f"更新完成 ({len(self.portfolio)} 只基金)")
+        self.root.after(0, lambda: self.set_status(f"更新完成 ({len(self.portfolio)} 只基金)", True))
         self.root.after(0, self.refresh_button_state, True)
 
     def refresh_button_state(self, enabled):
         for child in self.root.winfo_children():
-            for button in child.winfo_children():
-                if isinstance(button, tk.Button):
+            for label in child.winfo_children():
+                if isinstance(label, tk.Label):
                     try:
-                        button.config(state="normal" if enabled else "disabled")
+                        label.config(state="normal" if enabled else "disabled")
                     except:
                         pass
 
