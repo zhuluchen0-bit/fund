@@ -29,7 +29,7 @@ def fetch_top10_holdings(fund_code):
         ], capture_output=True, timeout=30)
         if result.returncode != 0:
             raise Exception(f"curl 失败")
-        data = result.stdout.decode("gbk", errors="replace")
+        data = result.stdout.decode("utf-8")
     except sp.TimeoutExpired:
         raise Exception("获取持仓超时")
     except Exception as e:
