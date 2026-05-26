@@ -584,12 +584,15 @@ class FundPortfolioApp:
                 item["_est_chg"] = weighted_sum
                 item["_coverage"] = total_weight / 100.0
 
-                # 检查正式净值是否已发布
-                nav = get_official_nav(item["code"])
-                if nav:
-                    item["_official_nav"] = nav[0]
-                    item["_official_chg"] = nav[1]
-                    item["_official_date"] = nav[2]
+                # 检查正式净值是否已发布（独立 try）
+                try:
+                    nav = get_official_nav(item["code"])
+                    if nav:
+                        item["_official_nav"] = nav[0]
+                        item["_official_chg"] = nav[1]
+                        item["_official_date"] = nav[2]
+                except:
+                    pass
 
                 changed = True
             except:
@@ -622,12 +625,15 @@ class FundPortfolioApp:
                 item["_est_chg"] = weighted_sum
                 item["_coverage"] = total_weight / 100.0
 
-                # 获取正式净值
-                nav = get_official_nav(code)
-                if nav:
-                    item["_official_nav"] = nav[0]
-                    item["_official_chg"] = nav[1]
-                    item["_official_date"] = nav[2]
+                # 获取正式净值（独立 try，不干扰估算数据）
+                try:
+                    nav = get_official_nav(code)
+                    if nav:
+                        item["_official_nav"] = nav[0]
+                        item["_official_chg"] = nav[1]
+                        item["_official_date"] = nav[2]
+                except:
+                    pass
 
             except Exception as e:
                 item.pop("_est_chg", None)
