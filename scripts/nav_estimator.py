@@ -100,11 +100,11 @@ def get_official_nav(fund_code):
     if result.returncode != 0:
         return None
     data = result.stdout.decode("utf-8", errors="replace")
-    m = re.search(r'\("Data":(.*?)"ErrCode"', data, re.DOTALL)
+    m = re.search(r'"Data":(\{.*?\}),"ErrCode"', data, re.DOTALL)
     if not m:
         return None
     try:
-        d = json.loads("{" + m.group(1) + '\"ErrCode\":0}')
+        d = json.loads(m.group(1))
         records = d.get("LSJZList", [])
         if not records:
             return None
