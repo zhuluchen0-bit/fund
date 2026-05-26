@@ -516,21 +516,23 @@ class FundPortfolioApp:
             # 实际涨跌列
             if official_chg is not None:
                 actual_text = f"{official_chg:+.2f}%"
-                actual_tag = "gain" if official_chg >= 0 else "loss"
             else:
-                actual_text = "\u23F3"  # 待更新（时钟图标）
-                actual_tag = ""
+                actual_text = "\u23F3"
 
             # 估算涨跌列
             if est_chg is not None:
                 est_text = f"{est_chg:+.2f}%"
-                est_tag = "gain" if est_chg >= 0 else "loss"
             else:
                 est_text = "-"
-                est_tag = ""
 
             # 净值日期
             date_text = official_date if official_date else "-"
+
+            # 行背景色：红涨绿跌
+            if use_chg is not None:
+                bg_tag = "up" if use_chg >= 0 else "down"
+            else:
+                bg_tag = "even" if not alt else "odd"
 
             values = (
                 item["code"],
@@ -540,19 +542,18 @@ class FundPortfolioApp:
                 f"{prev_yield:+.2f}%",
                 actual_text,
                 est_text,
-                f"{pnl_text}",
-                yield_text,
+                f"{daily_pnl:+,.2f}" if use_chg is not None else "-",
+                f"{new_yield:+.2f}%" if use_chg is not None else f"{prev_yield:+.2f}%",
                 date_text,
             )
-            tag = "even" if alt else "odd"
-            self.tree.insert("", "end", values=values, tags=(tag, actual_tag, est_tag))
+            self.tree.insert("", "end", values=values, tags=(bg_tag,))
             alt = not alt
 
         self.tree.tag_configure("even", background="#ffffff")
         self.tree.tag_configure("odd", background="#f8f9ff")
-        # A股习惯：红涨绿跌
-        self.tree.tag_configure("gain", foreground=self.COLORS["red"])
-        self.tree.tag_configure("loss", foreground=self.COLORS["green"])
+        # 红涨绿跌：浅色背景
+        self.tree.tag_configure("up", background="#fff0f0")     # 上涨-浅红
+        self.tree.tag_configure("down", background="#f0fff0")   # 下跌-浅绿
 
     def refresh_all(self):
         """全部基金重新获取数据"""
